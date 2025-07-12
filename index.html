@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bank Queue Management System</title>
+    <style>
+        body {
+            background: #0d1b2a;
+            font-family: 'Courier New', monospace;
+            color: #e0e1dd;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            color: #00ffcc;
+            text-shadow: 0 0 10px #00ffcc, 0 0 20px #00ffcc;
+            margin-bottom: 20px;
+        }
+        canvas {
+            border: 2px solid #00ffcc;
+            background: #1b263b;
+            box-shadow: 0 0 15px #00ffcc;
+        }
+        .controls {
+            margin: 20px 0;
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            background: #1b263b;
+            color: #00ffcc;
+            border: 2px solid #00ffcc;
+            padding: 10px 20px;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+            text-shadow: 0 0 5px #00ffcc;
+        }
+        button:hover {
+            background: #00ffcc;
+            color: #0d1b2a;
+            text-shadow: none;
+        }
+        .info {
+            background: #1b263b;
+            padding: 10px;
+            border: 2px solid #00ffcc;
+            margin-top: 10px;
+            width: 580px;
+            text-align: left;
+        }
+        .log {
+            background: #1b263b;
+            padding: 10px;
+            border: 2px solid #00ffcc;
+            margin-top: 10px;
+            width: 580px;
+            height: 100px;
+            overflow-y: auto;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Bank Queue Management System</h1>
+    <canvas id="canvas" width="600" height="400"></canvas>
+    <div class="controls">
+        <button onclick="addCustomer('Regular')">Add Regular Customer</button>
+        <button onclick="addCustomer('Premium')">Add Premium Customer</button>
+        <button onclick="serveCustomer()">Serve Customer</button>
+        <button onclick="resetQueue()">Reset Queue</button>
+    </div>
+    <div class="info" id="info">Queue Length: 0 | Avg Wait Time: 0s | Phase: Idle</div>
+    <div class="log" id="log">Event Log:<br></div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const info = document.getElementById('info');
+        const log = document.getElementById('log');
+
+        let customers = [];
+        let phase = 'Idle';
+        let totalWaitTime = 0;
+        let servedCustomers = 0;
+
+        class Customer {
+            constructor(id, type) {
+                this.id = id;
+                this.type = type;
+                this.x = Math.random() * (canvas.width - 40) + 20;
+                this.y = Math.random() * (canvas.height - 40) + 20;
+                this.waitingTime = 0;
+                this.served = false;
+                this.serviceTime = type === 'Premium' ? Math.floor(Math.random() * 3) + 1 : Math.floor(Math.random() * 5) + 1;
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 15, 0, Math.PI * 2);
+                ctx.fillStyle = this.type === 'Premium' ? '#ff0066' : '#00ccff';
+                ctx.fill();
+                ctx.strokeStyle = '#e0e1dd';
+                ctx.stroke();
+                ctx.font = '12px Courier New';
+                ctx.fillStyle = '#e0e1dd';
+                ctx.fillText(`ID:${this.id} (${this.type})`, this.x - 20, this.y - 20);
+            }
+
+            updateWaitTime() {
+                if (!this.served) this.waitingTime += 0.1;
+            }
+        }
+
+        function addCustomer(type) {
+            const customer = new Customer(customers.length, type);
+            customers.push(customer);
+            updateInfo();
+            addLog(`Added ${type} Customer ID:${customer.id}`);
+        }
+
+        async function serveCustomer() {
+            if (customers.length === 0) {
+                addLog('No customers in queue');
+                return;
+            }
+            phase = 'Serving';
+            updateInfo();
+            // Prioritize Premium customers
+            let customer = customers.find(c => !c.served && c.type === 'Premium');
+            if (!customer) customer = customers.find(c => !c.served);
+            if (!customer) {
+                phase = 'Idle';
+                updateInfo();
+                return;
+            }
+            customer.served = true;
+            addLog(`Serving ${customer.type} Customer ID:${customer.id} (${customer.serviceTime}s)`);
+            await new Promise(resolve => setTimeout(resolve, customer.serviceTime * 1000));
+            totalWaitTime += customer.waitingTime;
+            servedCustomers++;
+            customers = customers.filter(c => !c.served);
+            phase = 'Idle';
+            updateInfo();
+        }
+
+        function resetQueue() {
+            customers = [];
+            totalWaitTime = 0;
+            servedCustomers = 0;
+            phase = 'Idle';
+            updateInfo();
+            addLog('Queue reset');
+        }
+
+        function updateInfo() {
+            const avgWaitTime = servedCustomers > 0 ? (totalWaitTime / servedCustomers).toFixed(2) : 0;
+            info.textContent = `Queue Length: ${customers.length} | Avg Wait Time: ${avgWaitTime}s | Phase: ${phase}`;
+        }
+
+        function addLog(message) {
+            log.innerHTML += `${message}<br>`;
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // Draw queue flow (arrows)
+            for (let i = 0; i < customers.length - 1; i++) {
+                if (!customers[i].served && !customers[i + 1].served) {
+                    ctx.beginPath();
+                    ctx.moveTo(customers[i].x, customers[i].y);
+                    ctx.lineTo(customers[i + 1].x, customers[i + 1].y);
+                    ctx.strokeStyle = '#00ffcc';
+                    ctx.setLineDash([5, 5]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+            }
+            // Draw customers
+            customers.forEach(customer => {
+                if (!customer.served) {
+                    customer.updateWaitTime();
+                    customer.draw();
+                }
+            });
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
